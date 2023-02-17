@@ -1,0 +1,357 @@
+InterProcess communication(IPC):
+This concept is very common , specially when we talk about Microservices.
+Where each different services needs to interact with each other. And also for monolithic when we need to ineract with diff application.
+Here we will disCuss in-depth of IPC challenge and their solutions.
+1.Interaction style:
+	 there can be different way to categaorise, will see one of them as below
+	 a)Interaction can be
+	 i)one-one (Each client request is processed by one service) and
+        ii)one-many:Each client req can be processed by many services(eg.when place order it can trigger billing moule,inventory,report etc.)
+	 b) i)It can be synchronous(Client expect timely resp.) ii) Asynchronus: resp not necessarily sent immediatly.
+So, here one-one can be both sync/async and for one -many will be async only(pub/sub model or pub/async resp. using callback)
+
+
+API: A service's API is a contract betwn the service and the clients.Basically provides an interface that defines set of operations that module's client can invoke.
+But here problem comes when change/enhance required for API. As here client can be same application or another application too.
+
+Now how to handle the change depends on the nature of the change.:
+
+Semantic Versioning: Was originally intended to be used for versioning of s/w packages.
+But we can use it for versioning APIs in distributed system.
+it requires a version number to consist of thre parts: MAJOR.MINOR.PATCH.
+Major: when make an incompatible changes
+Minor: when make backward-compatible enhancement to api
+Patch: When we make backward-compatible bug fix
+
+
+Making Minor: 
+	Adding attr to req/resp or adding new operations
+	So older cient will work with new servises provided that they observe the robust principle:
+"Be conservative in what u do, be liberal in what u accept from others". Services should provide default value for missing attribute req. similar client shpuld ignore new attr in resp.
+
+Making Major:
+But in some case we need to do incomatibele change to API. her service must supports both old and new API.
+one approach to achieve this can be is embed version to API URL. ex.../V1/.. and .../V2/...
+Another option is to use HTTP's content negotiation mechanism and include the version number in the MIME type
+Accept:application/json;version=1
+
+
+**Message Format**
+This plays a vital role in IPC. the choice of messages format can impact the efficiency of IPC, the usability of api and its evolvibility.
+We can have two main category of message format:
+TEXT-Based:Such as JSON,XML: ADV. its human readable, This enables a consumer to consume the value of intereset and ignore the rest.
+Downside of this is every message has the overhead of containing the names of the attributes in addition to their values.
+second is the overhead of parsing text  speciall size is too large of mesg.
+ So when efficiency and perf are important we can consider binary format:
+ there are diff binary format such as : Avro, Protocol buffers,Thrift.
+ Provides a typed IDL(Interface definition language) for defining the structure of mesg.
+ https://martin.kleppmann.com/2012/12/05/schema-evolution-in-avro-protocol-buffers-thrift.html
+ 
+ Now lets see IPC mechanism that transport the messages:
+1. Communicating using sync remote procedure invocation pattern:
+here clients sent req to service and the service process the req and sends back a resp.
+
+https://microservices.io/patterns/communication-style/messaging.html
+
+	A)Using REST: Roy fielding(https://www.ics.uci.edu/~fielding/pubs/dissertation/top.htm)
+	https://roy.gbiv.com/untangled/2008/rest-apis-must-be-hypertext-driven
+	
+	The REST maturity model:
+	https://martinfowler.com/articles/richardsonMaturityModel.html
+	LEVEL0:ecah req provides action to perform,target of the action and any param.
+	LEVEL1:Supports the idea of resource , req provides action and any param
+	LEVEL2:Service uses HTTP verbs to perform action as GET , POST to create etc. 
+	LEVEL3: Based on HATEOAS principles
+** The challenges of fetching multi resources in a single req:
+ex: client want to retrieve order and consume details. Pure rest api would req two api calls for order and consumer.
+more complex case may need more round trips and suffer from expensive latency.
+
+one sol: GET /orders/orderid1?expand = consumer
+here query param specifies the related resource to return with order. This works well in many cases but insufficient for complex cases. and also time consuming for some scenarios. 
+Alternative API tech for these cases GRAPHQL(https://graphql.org/) :proveds solution for above cases.(one api can fetch roundtrip apis)
+
+**Second challenge is mapping operations to HTTP verbs:
+Ex: REST api should use PUT for updates but there may be multi ways to update an order ,ex canceling order, revising order.etc.
+And also update might not be idempotent which is a req for PUT api.
+one sol: Define a sub-resources for updating ex: POST/orders/orderid/cancel sadly its not a restful then.
+
+ADV:
+its simple, can test it from http browser,postman,curl,firewall friendly,
+Dis:
+it only supports re/resp style
+Reduced availabilty.Both must be running during mesg exchnage
+client must know the url of serverFetching multi resources
+Difficult to map multi update operation to http verbs
+
+
+*******Another alternative can be gRPC:
+https://grpc.io/
+
+gRPC is a binary message based protocol,of binary message format.
+ADV.:
+1.Easy to design api that has rich set of update operation.
+2.has efficient and compact IPc mechanism speciall when exchange large messages
+DisAd:takes mre work for Ui to consume grpc api the rest json based and older firewall might not support http/2
+but it also a sync mechanism.
+
+**Handling partial failure using the circuit breaker pattern:
+In distributed system , when service makes sync call then then there is possibility of service may be down or overloaded responding very slow.
+Bcoz here clien is blocked waiting for resp. danger here is failure could cascade to the client's client or so on.
+
+There can two dif way to slve this:
+Must use design RPI proxies, such as orderservice proxy, to handle unresponsive remote service.
+Need to decide how to recover from failed remote service
+
+**Devloping Robust RPi proxy
+https://netflixtechblog.com/fault-tolerance-in-a-high-volume-distributed-system-91ab4faae74a
+This approach consists of:
+1.N/w timeouts:Always use timeout when waiting for response
+2.Limiting number of oustanding req from a client to a service
+3.Circuit breaker pattern
+ex:Netflix hystrix(https://github.com/Netflix/Hystrix)
+
+Recovering from unavialble service:
+One option is for a service return an error ex:gateway can return error to client.
+
+Other option can be retring a fallback value ex: default or cached value
+
+**Another problem in Remote Procedure Invocation (RPI):
+It needs to know the n/w location of service instance.We can use service discovery mechanism to resolve this.
+
+
+*******Sevice discovery*****************
+Bsically , Earlier we use to keep depenedent ms location in config file.
+But as we know due to auscaling service instances changes dynamically. so we need something to update service location accordingly.In config file it will be dificult to update dynmically.
+
+Here, In Service discovery , it updates the service registry(its a db of n/w location of app's services.) when service location changed.When client invokes service servise discovery queries the registry to get the location and rputes the request.
+
+There are two main ways to implement:
+A)The service and their clients interact directly with the service registry(handle app level)
+B)The deployment infra handles service discovery.
+
+A)applying the app level service discovery pattern 
+
+So basically this is combination of two pattern:
+First is self registraion: Service instance register their location and helth check url with service registry.
+Service registry periodically call health check url to verify.
+Second called as Client side discvery pattern. where service client invokse a service by first querying the registry to get the location list of service instance .To improve perf it may cache also, then use a load balancing ex round robin,etc to select service instance. It then makes req to that service.
+
+**Netflix developed open sourcse several comp:
+Eureka: a highly avail service registry, the eureka java client, 
+A Ribbon :a sophisticated http client that supports Eureka client.
+Adv:
+It handles the scenario when services deployed on multi deployment platforms.
+ex: if we deployed few services using kubernates and few with old legacy. In this app level will get details frome Eureka and works smothly whereas deployment based ex kubernates only works within kubernates.
+Dis:
+We need a service discovery lib in every language that we use.
+We are responsible to manage the the service registry that is distarction.
+
+**SO to avoid that we can use deployment based Service discover patterns:
+Many deployment platform like Docker , kubernates have a built-in service registry and discovery mechanis.
+Deployment platform gives each service a DNS name a virtual Ip(VIP) and dns name that resolves the VIP add.
+A service client makes req to DNS /vip,and deplyment platform auto routes the req to the respective service
+its a combination of two patterns:
+A)3rd party registration pattern:instead of service registering itself, there third party called registrar part of deployment platform handles the registration.
+B)Server side discovery pattern:
+Instead  of client querying service registry,it makes a req to DNS name, which resolves to a req router that queries the registry and load balances req.
+
+Adv.:
+All aspect of service discovery are entirely handeled by the deployment paltform.
+the service is readily available to all services and clients regardless of which language it is written in.
+Dis:
+It only supports that have been deployed using the platform.
+ex: kubernates based discovery only works with services running on kubernates.
+Despite this it is recommendable.
+
+
+*************Communicating using Async message pattern*******:
+A mesg-based app typically uses message broker, which acts as an intermediary between the services.
+Althouh another option is to use a brokerless arch. where service directly communicate with each other.
+Client makes a req by sending it a mesg.
+
+Topics:
+sacle consumer, preserve mesg order, detect and delete /discard duplicate msg, send/receive msg as part of db transaction.
+
+In messaging :mesg are excahnged over message channel.sender sen msg to chanel and receiver receive from it.
+
+A mesg consist of header and body.
+Diff kinds are: Document(contains only data), command(operaton to invoke and parameter) and event(state change of domain obj. ex order,consumer,etc).
+
+A mesg channel is an abstarction of messaging infra.A mesg handler adapter class in the receiver is invoked to handle the mesg.
+Any no. of sender can send to channel and same any can consume from it.
+
+Types:
+Point -to -point:
+Delivers a mesg to exactly one of the consumer that is reading from the channel.ex:command message 
+A publish-subscribe: Delivers each mesg to all of the attached consumers.ex event mesg.
+
+***Impl one-way notification:
+The client send a mesg (command) to a poit-point channel owned by service. the service subscribe it and process the nesg.no repy.
+
+***Impl pub/sub:
+Messaging has built in suppport for this.A client publish a mesg(event) to a pub-sub channel that is consumed by multi consumer.
+ex: Order domain obj change will be published to order channel and will be consumed by related one. and so ..on deliver.consumer,etc
+
+***Impl pub/ASYN resp:
+By combining pub/sub and req/resp style.
+A client pub a mesg that specifies a repy channel header to a pub-sub channel. A consumer writes the a resp containg correlation id to the reply channel.The client gathers from reply channel using corelation id to mathch with req.
+
+**API specification for mesg based service api:
+Specify names of the mesg channel,the mesg type,their format(Json,xml),etc.
+
+
+***********Using message broker:
+A mesg based app typically uses a mesg broker, an infra service thru which the service commmunicates.
+But we can also use brokerless arch:
+Where services can exchange mesg directly.ex:ZeroMQ(https://zeromq.org/)
+ADv:
+Allows lighter n/w traffic and better latency(as msg go directly).
+Eliminates the possibility of single point failure
+No operation complexity as there is no brokers
+
+Drawback:
+Service needs to know each other location(use service discovery)
+Reduced availability as both sender and receiver has to be available
+Guaranteed delivery is more challanging.
+
+***overview of Broker based messaging:
+
+A mesg broker is mediary thru which all mesgs flow.One benefit of this is sender does not need to know the consume location and vice-versa. also it buffers mesg until consumer process it.
+Ex open source brokers: Active MQ, RabbitMQ, Apache kafka,AWS linesis, SQS, etc
+
+**Impl message channels using mesg  broker:
+Each broker impl in diffrent way:
+Broker   point-point    pub/sub channel
+JMS 	Queeu				topic
+Kafka 	topic 				topic
+AMQP
+(RabbitMq) Exchange +Queeu    Fanout exchange and queue per consumer
+ADV:
+Loose coupling
+mesg buffering ,Flexible communication, Explicit IPC
+Drawbacks:
+Potential performance bottleneck:Single pint failure, additional complexity
+
+**Competeing reciver and mesg ordring:
+How to scale out , preserving mesg order?
+
+There is chance where can be more consumer/thred to process the mesg concurrentlty.there is challange each mesg processed once and in order.
+ex:publisher publishes mesg order created , updated, and cancelled. in that case if mess proceesed out of order can cause issue.
+
+Solution:
+
+Sharded(partitioned) channel:
+
+1.Consists of two or more shards, each of which behaves like channel.
+2.Sender specify the shard key in the msg header, msg broker uses the shard key to assign the mesg to particular shard.
+3.Mesg broker groups together multi instances of a receiver and treats them as same logical receiver(called consumer group) and broker assigns each shard to a single receiver.
+Ex, here orderId can be shardkey, each event for same order will go to same shard, which is read by a single consumer instancec,here mesg are guaranteed to be processed in same order.
+**One shard will always one single receiver(consumer/consumer group).
+
+
+*******Handling duplicate meg:
+Ideally broker deliver each mesg only once, but guarnteeing this is too costly, instead most broker promise to deliver at least once.
+In case of failue of client before ack mesg broker may deliver multi times.
+eideally we should use broker that preserves ordering when redelivering mesg.
+else in above exam say order created and cancellled delivered but created not ack in that case redliver will create order again if no redeliver order preserves.
+
+***Ways to handle dupl mesg:
+
+A:Writing idempotent mesg handler: If the app logic that processes mesg is idemotent(calling same API multi time with same input has no effect) then it is harmless.
+But always making app logic idempotent is not posible . so we go with...
+
+B.Tracking mesg and discarding duplicates:
+When consumer handles a mesg, it store the mesg id in db, if mesg is duplicate it will fail nest time insert, can be discarded.
+2nd option If nosql then we can store that with app table only.
+
+****Transactional messaging:
+Sometime service need to publish as part of a transaction that updates the db.
+Meaning same within transaction we need to send data else might be db updated and issues occur then data not publishes to other that might create inconsisteny.
+
+Solution:
+Using a db table as a mesg queue:
+Transactional oitbox paatern:Service reliably publish a mesg by inserting it into a table(outbox)as part of the transaction that updats db.
+After that Message Relay comp redas the Outbox table and publish the mesg to mesg broker.
+
+
+There are diff way to send data from table to mesg broker:
+A)Publishing event by using the polling publisher pattern:
+In this case mesg relay periodically polls the masg form outbox table and sends to mesg broker and then deletes it from table.
+Downside is periodically polling db can be expensive and also for nosql case depends on query capability as here in case  we stroing with business entity then may be not possible to fetch efficiently.
+To solve this ...
+B)Publishing event by applying the transaction log tailing pattern:
+Mesg relay will tail the db transaction log. As every commited updates to db represent as an entry in db transaction log.
+A transaction log miner can read the log and publish mesg to broker.
+Ex: Debezium, LinkedIn Databus, DynamoDb stream, Eventuate Tram
+This works well bu the  challenge is requires some dev effort or use open source like Debezium.
+Proble with debezium is its focus is to capturing the data at db level and sending is out of scope.
+
+Eventuate Tram can be good solution : https://eventuate.io/tram/gettingstarted.html
+
+
+
+**Avaialability:
+Sync com reduces availaibility:
+As we know in case of sync com all related services should be UP and running else will fail.
+So, to maximize the availabilty , we must minimize the sync call.
+
+Ways to handle sync req without  making sync req:
+A)The client and services com async by sending msg via mesg channel,in this case broker buffers mesg until consumed.
+Problem here is if service is calling external api in that case that should up.
+One way to iprove that is we can replicate data .
+Replicate Data:
+Service maintains replicat data that need to process the req.It keeps the data updated by subscribing to event that published by source.
+ex.Oredr service can replicate consumer and resturatnt service data.
+Drawback here is sometime require replication large amt of data, which is inefficient.
+
+B)Finish processing after returning response:
+Anaother way can be:
+1.Validate req using data locally, 2. Update its db ,including insert mesg to outbox table.3.return a resp to client.
+here service doesnt interact sync , will interact asyn with other depenedent services.
+ex:Order service will create with PENDING state, return resp with orderId , asyn validate consumer,etc.Once getting validated confirmation from consumer, restuarant
+services async then update the state from pending->consumer validate->rest valid,etc... to created.
+In this approach consumer service or other dependeent service is not req to be up to create order.
+
+There only draback is make client more coplex as they need to poll order service to get state or service can send notif to client once created.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+		
+		
+		
+ 
+
