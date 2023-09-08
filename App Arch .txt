@@ -1,0 +1,96 @@
+Application Architecture Pattern:
+Monolith
+Microservice
+
+Decompostion Pattern:
+Decompose by:
+Business capability
+By subdomain
+
+
+Monolith: Which structures a system as a single executable or deployable component.
+It is good when the system is relatively small, has benefits as:
+Simple/Easy to develop
+Easy to made radical chnage : Can easily change the code, db , build and deployable
+Easy to test/deploy/scale(run multi instance behind the LB)
+
+But it become larger will face issues as:
+Development will become slow and painfull.Agile dev and deploy is imposssible
+Fixing bugs and new feature impl become difficult.
+Deploy changes to prod is long and painfull.
+Scalling is difficult:
+Diff app module have conflicting respurce requirement. Ex few module can store data in in-memory or few may need more CPU.
+this forces to use a tech stack thats become onsolete as entire app is tightly couple we have to go with same tech for new feature.
+
+
+
+Microservice:
+Scale Cube and MS: The art of scalabilty (Author: Addison-wesley):
+This model defines three ways to scale:
+X-axis: A common way for monolith. here we run multi instance of app behind LB.The LB distributes the req among N instances.
+Z-axis: This also runs multi instace but unlike x-axis , each instance is responsible for only subset of data.
+The router infront of instances uses a req attribute (ex:userId) to route it to proer instance.
+Great way to scale an app to handle increasing transaction and data volumes.
+
+Y-axis: As we saw X and Z scaling improve the capacity and availabilty. But this does not help to solve the problem of increasing development and app complexity. We can solev this using Y-axis or functional decomposition.
+Here We will split app into a set of services.Service is a mini app that impl narrowly focused functionality ex order management,Customer, etc.
+
+MS: An arch style that functionally decomposes an app into a set of services.Services are loosely coupled and communicated via APIs.Ideally datastore for each service will be separate.
+
+It is similar Service oriented Arch but there some differences as:
+inter-service comm:
+In SOA usually uses smart pipes as ESB heavyweight protocol as SOAP where as in MS Dumb pipes as mesg broker direct service-service com, lightweight protocol as REST orgRPC
+Data: SOA uses global data model and shared DBs, IN MS DB per service
+SOA larger monolith arch IN MS smaller services.
+
+Benefits of MS:
+Enables continuous deliver and deployment :
+Each service can be deployed independently of other services. No need to communicate with other dev,can easily deloy their cahneg.
+Enables dev teams to be autonomous and loosely coupled: can struc small team and can work independenly and deliver.
+Enables the business to rapidly react to feedback from customer.
+Each service is small and easily maintained:
+Independently scalable
+Better fault eisolation
+Easily adopt new tech
+
+Drawback:
+Finding the right set of services is challenging
+Distributed system complexity(SAGA,CQRS helps to achiev)
+
+
+Patterns:
+A pattern is a resuable solution to a problem that ocuurs in particular context.
+The concept was given by Christopher Alexander a real worl arch. S/w communityy got inspired. 
+Book Desing patterns: Elemnets of reusable object-oriented softare:(Addison wisely 1994) 
+
+
+Commonly used pattern has 3valuable section:
+Forces: The issues that we must address when solving a problem.It makes clear which issue needs to be solved.
+Resulting context: The consequences of applying pattern.It consis 3 parts: Benefits ,Drawback,Issues
+Related pattern: Describes the relationship between the pattern and another pattern. there are 5 types of relationship between patterns:
+Predecessor: that motivates the need for this pattern. EX: MA pattern is the predessor to the rest of the pattern.
+Successor: That solves the issue has been introduced by this pattern.ex if we apply MS then must apply service discovery pattern,etc.
+Alternative: That provides an alternative soln. Monolith for MS.
+Generalization: genearl soln to problem.ex: single service per host
+Specialization: specialized form. ex: Deploy a service as a container pattern is a specilized form of single service per host.
+
+
+MS arch pattern language: is a collection of patterns tht help us architec app using MS.
+1.Pattern for decomposing an app into services:
+a)decompose by business capability b)Decompose by subdomain
+2.Communication Pattern:Communication style(IPC),Discovery,Reliability(circuit breaker),Transaction messaging,Ext api(APi gateway).
+3.Data consistency pattern for impl transaction management:SAGA
+4.Pattern for querying data in MS: CQRS
+5.Service Deployment: (Deploy service as VM or container), Serverless approach
+6.Observability pattern provide insight into app behaviour:
+We can use below pattern to design observable services:
+Health check api: enpoint that returns the health of service
+Log aggregation: Write logs into centralized logging server taht provides searching and alerting.AWS Cloud Watch
+Distribute tracing: Assign uniq ID to each req and trace req as the flow between services.(Zipkin-sleuth)
+Exception Tracking:Report excetion to an exception tracking services which deduplicates exception , alert dev and track the resolutuion of each exception.(ELK)
+Application Metric: Maitain metrics and expose them to metric server.Actuator
+Audit logging-Log user action
+
+7.Pattern for automated testinf for services:
+8.Pattern for handling cross-cutting concerns: There are numerous concern taht evry service must impl ex:discovery pattern, Ext config pattern (cloud-config server).MS chasis pattern.
+9.Security pattern:ex Access token pattern(JWT)

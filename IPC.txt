@@ -1,3 +1,24 @@
+Topics covered:
+Reliable communication pattern:
+Circuit Breaker pattern
+
+Mesg style patterns:
+Remote procedure invocation pattern, 
+Messaging
+
+Service discovery pattern: 
+Client side discovery, 
+server side discovery, 
+self registeration,
+3rd party registration,
+
+Transactional messaging pattern:
+Polling publisher pattern,
+Transaction log tailing, 
+Transactional outbox,
+
+
+
 InterProcess communication(IPC):
 This concept is very common , specially when we talk about Microservices.
 Where each different services needs to interact with each other. And also for monolithic when we need to ineract with diff application.
@@ -151,7 +172,8 @@ Many deployment platform like Docker , kubernates have a built-in service regist
 Deployment platform gives each service a DNS name a virtual Ip(VIP) and dns name that resolves the VIP add.
 A service client makes req to DNS /vip,and deplyment platform auto routes the req to the respective service
 its a combination of two patterns:
-A)3rd party registration pattern:instead of service registering itself, there third party called registrar part of deployment platform handles the registration.
+A)3rd party registration pattern:instead of service registering itself, there third party called registrar part of deployment platform handles the registration. When the service instance shuts downs, the registrar unregisters the service instance from the service registry. ex: Netflix Prana , AWS Autoscaling Groups 
+
 B)Server side discovery pattern:
 Instead  of client querying service registry,it makes a req to DNS name, which resolves to a req router that queries the registry and load balances req.
 
@@ -270,7 +292,7 @@ Meaning same within transaction we need to send data else might be db updated an
 
 Solution:
 Using a db table as a mesg queue:
-Transactional oitbox paatern:Service reliably publish a mesg by inserting it into a table(outbox)as part of the transaction that updats db.
+Transactional outbox paatern:Service reliably publish a mesg by inserting it into a table(outbox)as part of the transaction that updats db.
 After that Message Relay comp redas the Outbox table and publish the mesg to mesg broker.
 
 

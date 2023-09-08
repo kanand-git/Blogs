@@ -1,0 +1,378 @@
+Topics covered:
+Business logic design pattern:
+Aggreagte pattern, Domain event, Event sourcing, Transcription script
+
+Querying pattern:
+Api composition
+CQRS
+
+
+
+
+Design business logic with DDD aggreagte pattern:
+
+As we know for any entrprise app the major challenging part is the business logic.
+Some use procedural transcription script or mos popular one is object-oriented principle.
+
+Devloping complex business logic in ms is more challenging as here logic will spread over multi services.
+
+Challenges 1: As here domain model is tangled web of interconnected clases it was not an issue with monolith but with MS, here classes will be scattred aroud diff services.
+
+Challenges2: design business logic that works within transaction management constraints(can use saga)
+
+We can resolve these by using the aggreaget pattern.
+
+An aggregate is a cluster of objs that can be treated as a unit.
+ex: order aggregate will have (order,orderline item,product,payment,delivery info)
+
+There are two main pattern for organizing business logic:
+1.Procedural transcription script pattern
+2.Object oriented domain model pattern
+1. we write a method called transcription script to handle each req from presentation layer. Here the classes that implement behavior are separate from those that store state.
+2.Organize the business logic as an object model cosisting of classes that have state and behavior.
+here adv: its easy to understand and manitain. Instead of consisting of one big class that does everything, it consist of a number of small classes that eash have a small no. of responsibilties.
+Easy to test as each class tested independently. 
+Easier to extend it can use strategy pattern and template method pattern.
+
+Object oriented domain (OOD) model is good but there are a nos of problem specially with MS. To address those we need to refinement of OOD known as DDD.
+
+Domain Driven Design:
+
+This includes following:
+Entity: An obj that has a persistenet identity
+Value Object: that is a collection of values.ex. Money class
+Factory: An obj or method that impl obj creation logic.it can also hide the concrete class that are instantiated.This might be impl as static method of class
+Repository: That provides access to persistent and encapsualtes the mechanism for db access.
+Servic: That implements business logic that doesnt belong in an entity or value object.
+
+*******************
+Traditional domai model we usually create classe as:
+ex Order,consumer,resturant, Courier, etc.
+
+but here the explicit boundaries are missing.
+ex: this doesnt specify which classes are part of the order business obj. this lack of boundaries can cause issue sp. with MS.
+
+1.Problem with fuzzy(lack) boundaries:
+Ex: when we wantto load or delete an order , here the scope of operation is not only the order there are also orderlineitem,payment,etc.
+
+lack of boundaries can cause issue with update also,
+ex: Ensure the order has minm amt.
+Two consumers are working togather to ensure that it should not exceed their budget.
+Both has tried to reduce item to match with amt of order.
+
+Here each consumer will upadate with 2 transaction first load the item and UI verifies the constraint for min amt and then second transaction executes.
+In this case X removed samosa for x amt and Y reduces burger for y amt. at the end may be it will upadte to 0.
+Eventhouh UI verifies that but still it violates the business as both case data was loaded to UI before eaither one persisted to DB.
+
+We can solve this by using aggreagte that will specify the explicit boundaries.
+Aggregae: Organizing a domain model as a collection of aggregates , each of which is a graph of obj that can be treated as unit.
+
+Ex: Order aggregate(order,payment,delivery,orderlinetem), consumer aggregate(consumer,delivery,payemnt),etc
+
+Aggreagte rules:
+
+1. Refrence only the aggreagte root.
+Ex in prev ex orderlineItem got updated direcltly that cause the problem.
+Clien can only update an aggreaget by invoking the method on the aggregate root and aggrgate can enforce the invariant.
+ex: Lets we have totalcose assoicated with order and we have exposed totalcost settter that is being update from outside that can cause issue. Instead we can hide this and update cost when line added or removed/etc inside this ligic reather tahn exposing out.
+
+
+2.Inter-aggregate references must use primary key.
+ex: Order will have (consumerId,resturantId)instead of having consumer obj.
+It ensures that the aggragte boundaries betwn aggraget are well defined also avoid accidental update a diff agragaet.
+Aggreaget also simplifies persistence since its the unit of storage.It makes easier to store with NOSQL.
+
+3.One transaction creates/upadte one aggreaget
+here app uses saga to update multi aggregate.
+
+Here key decision is to make is how large to make each aggregate and other aggreaget should ideally be small.
+
+
+Ex: we can include consumer as part of order aggreagte but drwbk it reduces acalability.
+
+***************************************
+
+What is domain event:
+A class which has properties taht meaningfully convey the event. ex ordercreate event has an orderid property.
+It can have some oteh metadata like timestamp,who made that change that can be use for audit, etc.
+
+Why publich change event:
+1. maitaining data consistency across services using chreography based saga
+2.Notify a service that maintains a replica that source data has chnaged. CQRS
+3.notify diff app or diff module
+4.sending notif email ect
+5.monitoring /analyzing event to model user behavior
+
+
+Event enrichment:
+Adding additional info to event that consumer needs.
+Event storming: a useful techninqu for quickly creating a domain model.
+steps: Brainstorming events,identify event trigger, identify aggragtes
+
+
+*****************************************************************************************
+Developing  business logic with Event Sourcing:
+Event sourcing is a diff way structring the business logic and persisting aggregates.
+It persist as seq of events that represetnt the state chnage of aggregate.
+
+It has benefits as : preserves the history of aggregates, that can use for audit or regulatory purposes.
+but as its a diff way to write so we have to learn and also querying event store is difficult. we can use CQRS.
+
+Problem with traditional persistence:
+In traditional approach maps classes to db table, fields as column and instance of class as row.
+that can be done as ORM/JPA
+but it has drawbakcs as:
+1.Object-relational impedance mismatch:
+the mismatch in the object model and the relational model, formally called Object/Relational Impedance mismatch.
+ex: Granularity Problem(Emloyee class can have adress type but same in db we cant),Inheritance,etc.
+Hibernate is an ORM (Object-Relational Mapping) tool. Its primary purpose is to translate concepts from object-oriented programming, such as classes, inheritance and fields, to concepts used in relational databases, such as tables, rows and columns.
+
+For example, a class corresponds to a database table, an object (instance of a class) corresponds to a database row, and a field corresponds to a database column.
+
+The term "object/relational mismatch" refers to the fact that there is not a clear way to translate all the concepts from object-oriented programming to relational database concepts and vice versa. Hibernate attempts to solve this problem.
+
+For example, how do you translate inheritance to relational database concepts? There's no such thing as inheritance in a relational database, so some way has to be invented to represent this in the database. Hibernate has different ways to do this, for example by having one table for the class hierarchy with a discriminator column to determine to which subclass a row maps, or by having a table per subclass.
+
+Likewise, there are concepts that exist in a relational database that cannot easily be translated to object oriented programming concepts.
+
+2.Lack of aggragte history:
+it stores only current state once updated prev state will be lost.
+3.Implementing audit logging is tedious and err prone:
+
+4.Event publishing is bolted on to the business logic:
+traditional way generally does not support publishing domain event.
+Some orm like hibernate supports the callback when data changed but there is no support for auto publish mesg as part of transaction. so in this case we need to bolt event generation logic as part of business logic.
+
+Another solution is Event Sourcing pattern:
+Event Sourcing is a pattern for storing data as events in an append-only log.
+Every change made is represented as an event, and appended to the event log. An entity’s current state can be created by replaying all the events in order of occurrence. Beyond preparing an audit log, an event-sourced system has a wealth of information and context stored within that can be incredibly valuable to the business.
+
+It persist each aggregate as a seq of events in the db known as event store.
+
+Handling concurrent upadtes using optimistic locking:
+As we know with concurrent req there is possibility to overrride the changes.
+We can use Optimistic locking to prevent one tran from overwriting another's change.
+here we will have ne column as version to detect if any change happen.
+ex: update table set version=version+1 where version=original version
+
+here for each update we add cond. version that will prevent to oveeride the cahnges by other. Eventhough 2 req read the same value while update for 2nd will fail as version is changed by the 1st tran.
+
+Event store can also use the same approach.
+Event  sourcing and publishing events:
+We can poll the event form table by select * from event where ev_id>? order by ev_-id ASC.
+there problem will come when commit is not in same order how event generated.
+ex: 1002 commited and 1000 commited in this case 1000 will skip.
+we can solve this by having addition column as published that will have 0 value while insert to db once published will update to 1.
+Another to solve this is transaction log tailing:it will read from db transaction log and published to  mesg broker.this is guranted and more scalable.
+
+
+Using Snapshot to improve performance:
+Long lived aggragte can have large no of events over time it will become inefficient to load those.
+We solve this by periodically persist a snapshot of it.
+
+Idempotent mesg processing:
+There is a possibility of duplicate mesg deliver. Eventuate tram framework impl by detecting and discarding. it records the mesg id of processed mesg in a processed_mesg table.
+same we can impl own alos:
+RDBMS: we can store mesg_id same like above approach
+NoSQL:
+
+Benefits of Event sourcing:
+Reliably publishes domain events, preserve the history , avoid O/R impedance mis match
+
+-Root cause analysis
+Business events can be tied back to their originating events providing traceability and visibility of entire workflows from start to finish.
+Time travel
+All state changes are kept, so it is possible to move systems backward and forwards in time which is extremely valuable for debugging and “what if” analysis.
+Event-driven architecture
+Traditional approaches gather data in discrete areas to be called on only when needed. An event-driven approach can be more efficient by immediately reacting to new published information. Event streams can create notifications about new events, and by subscribing to the stream, business can react to these changes in real-time. This allows for easier modelling and building complex business workflows.
+Legacy migration
+Migration of legacy systems to modern distributed architectures can be carried out incrementally, gradually replacing specific pieces of functionality with event-sourced services. Existing read paths of the legacy system can remain in place while writes are directed to the services.
+
+Drawback:
+Complexity of mesg based app
+Evolving event can be tricky:
+Deleting data is tricky: Traditional way to delete a record is soft delete but coplying with GDPR due to privacy we need to delete all the personal info. The application has to forget these without deleteing the events.
+one way we can solve this by encryption where each user key will be stored separtely, when user req for erased will delete the key at end will not able to decrypth their personal info.
+And also avoid using personal field to map/reltaion ex: email/mobile to track user identity.
+Instead use UUID here.
+Querying the event store is challenging: can use CQRS
+
+Implemnting event store:
+An event store is hybrid of a db and mesg broker. it provides api to persis/read/etc of events and api for subscribing to events.
+
+We can impl in diff way like can have simple rdms table where will store events and but challenge is ensuring subscriber processed in same order.
+
+Another provider : 
+1.Event store eventstore.org(.net based)
+2.Lagom 3. Axon 4. Eventuate 
+
+
+
+
+
+  
+  
+*********************************************************************************
+  Implementing queries in MS:
+  There are two diff patterns for impl query operation in MS arch:
+1. The Api composition pattern:
+2.CQRS(Command query responsibilty segragation) Pattern:
+1. The api compostion pattern consist of an API composer and two or more provider services.The composer impl a query by querying the providera and combining the results.
+ex: User ->query(Api composer)-> query a,query b, etc and -> composer will aggreagte the result and send back.
+
+here API composer is a service that will expose the query as REST endpoint. The provider also impl Rest api.
+ex: find order-> here composer will get the details using orderid from diff provider like order,kitchen,account etc and aggreagte the result.
+Challengs:
+Deciding Which component is the query operation API composer.
+How to write efficient aggrgation logic
+
+first option could be the client as frontend but since this is outside of firewall and also will be slower.
+2nd: API gateway 
+3rd: Impl as a standalone services in acse if aggreagtion logic is complex to be part of gateway.
+
+We should use a reactive programming like completable Future,RXJava observale,etc. As miimizing the 4latency will be the main consern. we can call provider in parallel where ever possible.
+
+This pattern is simple and easy to impl but
+Drawback:
+Increased overhead as in monolith it will be one req whereas here we need to hit diff services.
+Risk of reduced availabilty:as there multi provider but we can reduce it be using the previously  cache data at provider.or cache at composer level might get stale data here. or composer can return in complete data.
+Lack of transactional data consistency:
+here composer exec multi db there is a risk of getting inconsistent data.
+
+***************************************
+2.CQRS
+Problem
+How to implement a query that retrieves data from multiple services in a microservice architecture?
+1. Using api comp to retriev data scattered across diff module is expensive, inefficient in-memory join
+2.some time the service that owns the data doesnt effciently support the re query
+3.the need to separate concern is the service that owns the data doest not the service that impl he query operations
+
+Solution:
+Define a view database, which is a read-only replica that is designed to support that query. The application keeps the replica up to data by subscribing to Domain events published by the service that own the data.
+CQRS: It splits the persistent data model and the module that uses it into parts:
+Command: impl create/update/delete(CUD POST,PUT,DELETE).
+Query:impl queries(Read), This side data model keeps synchronized with command side data model by subscribing to the event published by command side.
+Good way to impl a view that is build by subs events. this kind of view doen not belong to an services, so it make sense to impl
+standalone service. 
+Ex: order history service(will subs order,delivery,cinsumer,etc)
+Its similar to using RDBMS and text search engine elastic search to handle text queries. Only diff is CQRS usea a broader range of db types.query side view updated near real time by subs events.
+
+ADV:
+Enables the efficient impl of queries in MS: since this uses an easily queried CQRS view that has pre-joins dat from diff services.
+Efficient impl of diverse query: this avoids the limitaion of single datastore by defining one or more views each of which can efficinetly impl for sp. queries.
+Enables querying in an event sourcing based application:
+this overcome a major limitation of event sourcing as event store only supports primary key based query.
+Improves separation of consern
+
+
+Dis Adv:
+More complex arch: dev must write code to update query the view.manage add data stores. in case of diff db need to add extra efoort
+Dealing with replication lag:
+as command side and query side both needs to be in sync there is possiblity of lag. one sol can be mainating a version.
+or UI code can update the page by taking response from command side opertaion until query side updated.
+
+
+Imp design decision for developing view module:
+Choosing a view store SQL vs NOSQL
+Supporting update operations: should be efficinet to update by event handler
+Data access module design -update/query shuld not access data store directly it should be thru DAO.
+handling concurrency: DAO mst handle it if any.
+idempotent event handler:it should detect and discard dupl mesg if any by having processed mesg details stored.
+Enabling a client app to use an eventually consistent view:
+here view is eventualy consistent bcoz of unaviodable latency of mesg arch.
+It can solev by command side can return a token contating published event id to the client that can be used to fetch from query side if not throw err.
+
+Build CQRS view using archived events: as we know keeping event for longer time is not possible as ther is time limit of msg retention in mesg broker. we can archive it to S3 and can use big data tech like Apache spark.
+
+Build cqrs view incrementally: start creating snapshot going over time . and then use snapshot to create view.
+
+
+Event sourcing and CQRS seems like a new and interesting design patterns, but they have been around for some time. CQRS can feel like a strange new technique, especially after spending years learning with a foundation based in CRUD. CQRS was described by Greg Young as a ‘stepping stone towards Event Sourcing’. It’s important to understand event sourcing and CQRS do not rely on each other; you can have an event sourced system without CQRS and you can use CQRS without event sourcing. It’s just that the two work best together.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+https://www.odbms.org/wp-content/uploads/2013/11/031.01-Neward-The-Vietnam-of-Computer-Science-June-2006.pdf
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 

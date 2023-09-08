@@ -1,0 +1,211 @@
+
+As we know ACID(Atomicity, Consistency, Isolation, Durability) transaction simplify the job of dev,
+and in microservice within single service we can still use it but the challange comes when data owned by multi services.
+Within a service many lib available that provides a way to manage transaction(commit , rollback,@transcation,etc).
+
+But for ms here each service has its own db so we need mechanism to maintain data consistency across servicse.
+
+one way is to use distributed transaction:
+XA compliant XA technology stack(most db and mesg broker provides this)
+1.https://en.wikipedia.org/wiki/X/Open_XA
+2.https://en.wikipedia.org/wiki/Two-phase_commit_protocol
+3. JEE provides JTA as distribute transaction:
+Java Transaction API (JTA) specifies standard Java interfaces between a transaction manager and the parties involved in 
+a distributed transaction system: the resource manager, the application server, and the transactional applications.
+
+problem:
+but many modern tech does nt support this like NOSQL DB(mongo,etc),mesg broker(kafka,rabbit mq) 
+and another problem  is
+Distributed transactions(DT) are form of synchronous IPC, which reduce availability.Meaning for DT to commit all participant
+must be available.so here as each additional services involved further reduces availabilty.
+
+As cap says system can only have two(consistency,availbilty and partition):https://en.wikipedia.org/wiki/CAP_theorem.
+however most system prefer to have system that's available rather the one thats consistent
+
+Solution:
+To solve the problem of maintaing consistency in ms that builds on the concept of loosely coupled async service.
+thats where SAGA comes in......
+
+Saga maintain data consistency across services using a seq of local transaction that are coordinated using async messaging.
+https://microservices.io/patterns/data/saga.html
+
+Here, we define a saga for each system command that needs to update data in multi services.
+A saga is a seq of og local transcation and each local transaction updates data within a single services.
+the completion of transaction trigers the exec of next local transcation.
+here co-ordinatoin of steps is implemented thru async mech.
+
+EX: Create order using SAGA:
+Saga will have following local transactions:
+1.Order servise:Create an order with state approval_pending
+2.consumer service:Verify the consumer 
+3.Kitchen service:validate order details and create a ticket in pending state
+4.Acounting service:auth consumer credit card
+5.kitchen service: change the state of ticket
+6.order servise: create order approved state
+
+here services publish a mesg when local tran complets and this mesg then trigger the next step.
+using mesg ensures that participant are loosely coupled, also guranttes that will complet bcoz if next service not avilable that 
+corresponding mesg will still be there in buffers.
+
+Challeges:
+lack of isolation
+rolling back chnages when err occured 
+
+1. SAGA uses compensating transaction to roll back changes
+   As with ACID we jsut do roolback and db undo all the changes.here saga cant do as each step has 
+   local transaction with local db.
+
+so here if we got err for step 3 then we have to undo changes for first 2 steps.We have to write here compensating transactions.
+Suppose that n+1 tran fails then first n tran must be undone.
+Note: Not all steps need such read only transaction need not be consider as CT.
+
+A saga's coordination logic is responsible for sequencing the exec forward and compensating transactions.
+
+* Coordinating sagas: When saga is initiated by system command the coordination logic must select 
+and tell first saga participant to exec local tran.
+once that is completes the saga seq coordinating select and invoke next this process continew until all steps executed. 
+if any fails the saga must exec compensating transaction in revrse order.
+***there are diff ways to structure the saga's coordination Logic:
+
+A)Choreography: Distribute the decision making and seq among the saga participant.they primarily communicate
+ by exchnaging events.
+B)Orchestration: Centralize a saga's coordination logic in a saga orchestrator class.
+A saga orchestrator sends a mesg to participant which operation to perform.
+
+A) Choreography-based saga:
+	In this approach there is no central cordinating telling the saga participant what to do.
+ Instead each paticipant subscribe to each other's event and respond accordingly.
+Ex: Impl of create order saga using above:
+1.Order service create order in pending state and publish an ordercreated event
+2.Consumer service consumes event verfies the consumer and publishes consumer-verified event.
+3.Kitchen servise consumes ordercreated event , validates the order and create a ticket in pending state and publish ticket created event.
+4.Accounting service consumes the ordercreated event and create creditcard auth in pending state.
+5.Accounting service consumes the ticket created and consumer verified event, charges the card and publishes card-authorised evnt.
+6.Kitchen service consumes the cardauth event and changes the state of the ticket to awaiting state.
+7.Order service receives the creditcardauthorized events, changes the state of order to approved and publishes an order event.
+
+
+The create order saga must also handle the scenario where a saga participant rejects the order and publishes some kind of failure event.
+
+ex: card invalid, kitchen service not available etc.
+
+In that case we must need to transaction undo what is done.
+
+The seq to handle card invalid use case can be as follows:
+Till step 4 as above.
+5.Accounting service consumes the ticket created and consumer verified event, charges the card and publishes card-unauthorised evnt.
+6.Kitchen service consumes car unauth event and changes state of the ticket as rejected.
+7.Order service conusme car-unauth and chnage state of order as rejected.
+
+Here in choreography based saga we interact with pub/sub model.
+But here are some key points taht needs to be addresed
+1.First is to enusre saga participant updates db and publishes event as part of transaction.
+menaing db updates and pub event happen attomically else may create inconsistency.
+else might be db will get updated but while sending event any error occured.
+that we can achiev thru transactional messaging(debezium) approach
+
+2.Ensure that saga participant must be able to map the event that its receives to its own data.
+To achieve that we can publish event containing correlation id (ex in this cas eorder_id). SO that all event will get the 
+order id from event and updates the releted record only in corresponding entity.
+
+Adv:
+A)Simplicity: B) Loose coupling as its based on pub/sub no need to know each other details.
+Dis:
+Difficult to understand: As ochestration based , it is not a single place in code that defines saga.
+Instead this distributes the impl of saga among the services.
+B)Cyclic dependencies between services: here each saga participant subscribe to each other's event.which often create cyclic.
+C)Risk of tight coupling: 
+So it is good for simple sagas. 
+but Its better to use Orchestration based for complex sagas.
+
+
+2. Orchestration -based saga:
+Here we define orchestrator class whose sole responsibility is to tell saga member what to do.
+To exec saga this sends a command mesg to participant telling what operation to perform, after operation performed by participant 
+this sends a reply mesg asyn to the orchestartor.
+The orchestrator then process mesg and decide which saga step to perform next.
+ 
+
+EX: Order service creates order and Create order saga orchestrator:
+Happy path for orchestrator can be as:
+1.orchestrator sends a verfify consumer cmd to consumer service
+2.Consumer ser replies verified:
+3.orchestrator sends create ticket command to kitchen service
+4.kitchen ser replies created
+5.orches send auth_ card cmd to accounting service.
+6. Accnt service replies authirised 
+7orches send ticket approve cmd to kitchen service
+8.orche send approver order cmd to order service
+
+above solve one happy use case but practically there can be diff usecase like failed durng consumer verif or account/kitchen etc.
+So we can model a saga orchestrator as state machine;
+
+**Saga orchestrator as state machine:
+A state machine consist set of states and transition between states that get triger by events.
+the current state and outcome of local transaction determine the transition state and what action.
+Ex: State machine will have states like:
+Verify consumer,creating ticket,verfiy card,order approved/reject,
+Saga orche with transactional mesg:
+as we saw here each step consist of updating local db and publish a mesg as cmd.
+ here to make atomically update and send mesg we can use transaction log mesg approach.
+
+
+ADV:
+Simpler dependencies: no cyclic depe.., as here orches invoke participant but 
+participant cant invoke orches and orches depend on participant and no vise versa.
+less coupling
+Simplifies bussiness logic. all coordination logic is localized in orches only.
+
+Dis:
+The risk of centralizing all business logic.but we can solve this by desing as orches is solely responsible for seq and not contain business logic.
+
+** Lack of isolation:
+Challange with using saga is lack of Isolation property of ACID.
+Bcoz the updates of one participant will be avaialble even though entire saga is not completed yet.
+That can cause anamolies.
+Lack of isolation can cause below anmolies:
+A)Lost updates : One saga ovverides chnages made by other sagas.
+Ex: Create order saga creates order while exec Cancel order sga has cancel the order but final step of create order saga approved the order.
+B)Dirty Reads:
+When one saga reads data that is in middle of being updated by another saga.
+c)Fuzzy/nonrepeatable reads: Two diff steps of saga read the same data and get diff results bcoz another saga has made updates
+
+SO here dev need to handle all these cases while design.
+ex: We can have state as pending and when another sga tries to update can discard that if it in pending state.
+As we know saga can have 3 diff type of transaction:
+1)Compensatable transaction: Transaction that can be rollback
+2)Pivot transaction: the g/ no go point in  a saga. and
+3)Retriable : transaction that dont need to be roll back and are guranteed to be completed.
+Countermeasure:
+Semantic lock: here saga compensable transaction put a flag to indicates that record is not committed or locked.
+ex:ordere_state create order will have  Pendig state and if everything good retriable will change as approved or fail the compensable transaction will make rejected.
+
+but here locking record will not solve all problem as we have to handle how saga deal with locked record.
+ex:user req: cancel order how will update as cancel bcoz records are locked?
+one option can be cancel req will fail and ask client to make req latter. it will be easy but client need to handle retry logic.
+Another option we can have as will block the cancel req until lock is relesased but here we have to manage lock properly and deadlock detection.
+
+Countermeasure: commutative updates:
+Operations are commutative if they can be exec in any order. ex. acnt credi/debit
+
+Countermeasure: pessimestic view:
+Another way to deal with isolation is reorders the steps of saga to minimize the business risk due to dirty read.
+
+Countermeasure: Reread value:
+this uses reread a record before updating it, verifies that its unchanged.if changed then abort and restart.
+for example before approve order it will check if it is same if canceled then abrt the saga:
+https://martinfowler.com/eaaCatalog/optimisticOfflineLock.html
+
+Countermeasure: version file:
+It records the operations that are performed on a record so that it can reorder.
+ex: in case of cancel order example. acnt service will recieve auth_card and cancel auth req, then it will reorder it and skip auth_card op.
+
+Countermeasure: By value:
+A strategy for slecting concurrency mechanism based on business risk.
+
+
+
+
+
+
+
