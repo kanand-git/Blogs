@@ -39,7 +39,7 @@ MS: An arch style that functionally decomposes an app into a set of services.Ser
 
 It is similar Service oriented Arch but there some differences as:
 inter-service comm:
-In SOA usually uses smart pipes as ESB heavyweight protocol as SOAP where as in MS Dumb pipes as mesg broker direct service-service com, lightweight protocol as REST orgRPC
+In SOA usually uses smart pipes as ESB heavyweight protocol as SOAP where as in MS Dumb pipes as mesg broker direct service-service com, lightweight protocol as REST or gRPC
 Data: SOA uses global data model and shared DBs, IN MS DB per service
 SOA larger monolith arch IN MS smaller services.
 

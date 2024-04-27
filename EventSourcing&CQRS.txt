@@ -7,12 +7,10 @@ Api composition
 CQRS
 
 
-
-
 Design business logic with DDD aggreagte pattern:
 
 As we know for any entrprise app the major challenging part is the business logic.
-Some use procedural transcription script or mos popular one is object-oriented principle.
+Some use procedural transcription script or most popular one is object-oriented principle.
 
 Devloping complex business logic in ms is more challenging as here logic will spread over multi services.
 
@@ -39,7 +37,7 @@ Object oriented domain (OOD) model is good but there are a nos of problem specia
 Domain Driven Design:
 
 This includes following:
-Entity: An obj that has a persistenet identity
+Entity: An obj that has a persistent identity
 Value Object: that is a collection of values.ex. Money class
 Factory: An obj or method that impl obj creation logic.it can also hide the concrete class that are instantiated.This might be impl as static method of class
 Repository: That provides access to persistent and encapsualtes the mechanism for db access.
@@ -53,7 +51,7 @@ but here the explicit boundaries are missing.
 ex: this doesnt specify which classes are part of the order business obj. this lack of boundaries can cause issue sp. with MS.
 
 1.Problem with fuzzy(lack) boundaries:
-Ex: when we wantto load or delete an order , here the scope of operation is not only the order there are also orderlineitem,payment,etc.
+Ex: when we want to load or delete an order , here the scope of operation is not only the order there are also orderlineitem,payment,etc.
 
 lack of boundaries can cause issue with update also,
 ex: Ensure the order has minm amt.
@@ -74,7 +72,7 @@ Aggreagte rules:
 1. Refrence only the aggreagte root.
 Ex in prev ex orderlineItem got updated direcltly that cause the problem.
 Clien can only update an aggreaget by invoking the method on the aggregate root and aggrgate can enforce the invariant.
-ex: Lets we have totalcose assoicated with order and we have exposed totalcost settter that is being update from outside that can cause issue. Instead we can hide this and update cost when line added or removed/etc inside this ligic reather tahn exposing out.
+ex: Lets we have totalcost assoicated with order and we have exposed totalcost settter that is being update from outside that can cause issue. Instead we can hide this and update cost when line added or removed/etc inside this ligic reather tahn exposing out.
 
 
 2.Inter-aggregate references must use primary key.
@@ -94,7 +92,7 @@ Ex: we can include consumer as part of order aggreagte but drwbk it reduces acal
 
 What is domain event:
 A class which has properties taht meaningfully convey the event. ex ordercreate event has an orderid property.
-It can have some oteh metadata like timestamp,who made that change that can be use for audit, etc.
+It can have some other metadata like timestamp,who made that change that can be use for audit, etc.
 
 Why publich change event:
 1. maitaining data consistency across services using chreography based saga
@@ -152,7 +150,7 @@ It persist each aggregate as a seq of events in the db known as event store.
 Handling concurrent upadtes using optimistic locking:
 As we know with concurrent req there is possibility to overrride the changes.
 We can use Optimistic locking to prevent one tran from overwriting another's change.
-here we will have ne column as version to detect if any change happen.
+here we will have new column as version to detect if any change happen.
 ex: update table set version=version+1 where version=original version
 
 here for each update we add cond. version that will prevent to oveeride the cahnges by other. Eventhough 2 req read the same value while update for 2nd will fail as version is changed by the 1st tran.
@@ -230,7 +228,7 @@ first option could be the client as frontend but since this is outside of firewa
 2nd: API gateway 
 3rd: Impl as a standalone services in acse if aggreagtion logic is complex to be part of gateway.
 
-We should use a reactive programming like completable Future,RXJava observale,etc. As miimizing the 4latency will be the main consern. we can call provider in parallel where ever possible.
+We should use a reactive programming like completable Future,RXJava observale,etc. As miimizing the latency will be the main consern. we can call provider in parallel where ever possible.
 
 This pattern is simple and easy to impl but
 Drawback:
@@ -255,7 +253,7 @@ Query:impl queries(Read), This side data model keeps synchronized with command s
 Good way to impl a view that is build by subs events. this kind of view doen not belong to an services, so it make sense to impl
 standalone service. 
 Ex: order history service(will subs order,delivery,cinsumer,etc)
-Its similar to using RDBMS and text search engine elastic search to handle text queries. Only diff is CQRS usea a broader range of db types.query side view updated near real time by subs events.
+Its similar to using RDBMS and text search engine elastic search to handle text queries. Only diff is CQRS uses a broader range of db types.query side view updated near real time by subs events.
 
 ADV:
 Enables the efficient impl of queries in MS: since this uses an easily queried CQRS view that has pre-joins dat from diff services.

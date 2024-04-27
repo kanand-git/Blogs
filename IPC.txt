@@ -21,7 +21,7 @@ Transactional outbox,
 
 InterProcess communication(IPC):
 This concept is very common , specially when we talk about Microservices.
-Where each different services needs to interact with each other. And also for monolithic when we need to ineract with diff application.
+Where each different services needs to interact with each other. And also for monolithic when we need to interact with diff application.
 Here we will disCuss in-depth of IPC challenge and their solutions.
 1.Interaction style:
 	 there can be different way to categaorise, will see one of them as below
@@ -111,8 +111,8 @@ https://grpc.io/
 gRPC is a binary message based protocol,of binary message format.
 ADV.:
 1.Easy to design api that has rich set of update operation.
-2.has efficient and compact IPc mechanism speciall when exchange large messages
-DisAd:takes mre work for Ui to consume grpc api the rest json based and older firewall might not support http/2
+2.has efficient and compact IPc mechanism specially when exchange large messages
+DisAd:takes more work for Ui to consume grpc api the rest json based and older firewall might not support http/2
 but it also a sync mechanism.
 
 **Handling partial failure using the circuit breaker pattern:
@@ -205,6 +205,7 @@ Any no. of sender can send to channel and same any can consume from it.
 Types:
 Point -to -point:
 Delivers a mesg to exactly one of the consumer that is reading from the channel.ex:command message 
+
 A publish-subscribe: Delivers each mesg to all of the attached consumers.ex event mesg.
 
 ***Impl one-way notification:
